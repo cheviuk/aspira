@@ -11,9 +11,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 
@@ -30,11 +30,12 @@ public class Main {
             Map<String, League> leagues = sports.values().stream()
                     .flatMap(mapper -> mapper.getLeagueList().stream())
                     .collect(Collectors.toMap(League::getId, v -> v));
-            leagues.forEach((k, v) -> executorService.submit(() -> v.setEventList(getEvents(client, v))));
-            executorService.shutdown();
-            if (executorService.awaitTermination(60, TimeUnit.SECONDS)) {
-                print(sports);
-            }
+            List<CompletableFuture<Void>> futures = leagues.values().stream()
+                    .map(league -> getEvents(client, league).thenAccept(league::setEventList))
+                    .toList();
+
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).thenRun(() -> print(sports))
+                    .join();
         }
     }
 
@@ -61,22 +62,20 @@ public class Main {
     static List<League> getTopLeagues(String jsonString, String sportId) {
         List<Map<String, Object>> topLeagues = JsonPath.parse(jsonString)
                 .read("$[?(@.id == " + sportId + ")]..leagues[?(@.top == true)]");
-        return topLeagues.stream()
-                .map(m -> new League(m.get("id").toString(), m.get("name").toString(), null))
-                .toList();
+        return topLeagues.stream().map(m -> new League(m.get("id").toString(), m.get("name").toString())).toList();
     }
 
-    static List<Event> getEvents(HttpClient httpClient, League league) {
+    static CompletableFuture<List<Event>> getEvents(HttpClient httpClient, League league) {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("https://leonbets.com/api-2/betline/events/all?ctag=en-US&league_id="
-                        + league.getId()
-                        + "&hideClosed=true&flags=reg,urlv2,mm2,rrc,nodup"))
+                        + league.getId() + "&hideClosed=true&flags=reg,urlv2,mm2,rrc,nodup"))
                 .GET()
                 .build();
-        try {
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            String jsonString = response.body();
-            DocumentContext documentContext = JsonPath.parse(jsonString);
+
+        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenApply(HttpResponse::body)
+                .thenApply(response -> {
+            DocumentContext documentContext = JsonPath.parse(response);
             List<Map<String, Object>> firstTwoEvents = documentContext.read("$.events[:2]");
             return firstTwoEvents.stream().map(mapper -> {
                 String eventId = mapper.get("id").toString();
@@ -85,10 +84,10 @@ public class Main {
                 List<Market> marketList = getMarkets(documentContext, eventId);
                 return new Event(eventId, eventName, kickoff, marketList);
             }).collect(Collectors.toList());
-        } catch (Exception e) {
-            System.out.println(e.getLocalizedMessage());
-        }
-        return List.of();
+        }).exceptionally(e -> {
+            System.out.println("Error during getting events: " + e.getMessage());
+            return List.of();
+        });
     }
 
     static List<Market> getMarkets(DocumentContext documentContext, String eventId) {

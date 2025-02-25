@@ -9,12 +9,14 @@ public class Event {
     private final String name;
     private final Long kickoff;
     private final List<Market> marketList;
+
     public Event(String id, String name, Long kickoff, List<Market> marketList) {
         this.id = id;
         this.name = name;
         this.kickoff = kickoff;
         this.marketList = marketList;
     }
+
     @Override
     public String toString() {
         StringBuilder result = new StringBuilder();
@@ -24,6 +26,7 @@ public class Event {
         }
         return result.toString();
     }
+
     private String getUtcKickoff() {
         Instant instant = Instant.ofEpochMilli(kickoff);
         DateTimeFormatter formatter = DateTimeFormatter.ISO_INSTANT;

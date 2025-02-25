@@ -6,11 +6,13 @@ public class Market {
     String id;
     String name;
     List<Runner> runnerList;
+
     public Market(String id, String name, List<Runner> runnerList) {
         this.id = id;
         this.name = name;
         this.runnerList = runnerList;
     }
+
     @Override
     public String toString() {
         StringBuilder result = new StringBuilder();

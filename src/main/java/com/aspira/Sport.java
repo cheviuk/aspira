@@ -6,17 +6,21 @@ public class Sport {
     private final String id;
     private final String name;
     private final List<League> leagueList;
+
     public Sport(String id, String name, List<League> leagueList) {
         this.id = id;
         this.name = name;
         this.leagueList = leagueList;
     }
+
     public String getId() {
         return id;
     }
+
     public List<League> getLeagueList() {
         return leagueList;
     }
+
     @Override
     public String toString() {
         StringBuilder result = new StringBuilder();
